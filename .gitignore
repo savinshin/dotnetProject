@@ -1,0 +1,45 @@
+# ------------ Visual Studio / .NET ------------
+.vs/
+*.user
+*.rsuser
+*.suo
+*.sln.docstates
+*.DotSettings.user
+
+# Build artifacts
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+*.log
+artifacts/
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+
+# Rider/JetBrains
+.idea/
+*.sln.iml
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# ------------- Node/React ----------------------
+# ?????????? ???????? ????????????, ?? ?? lock-?????
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ------------- Env/OS --------------------------
+*.env
+*.env.*
+!.env.example
+
+# OS junk
+Thumbs.db
+.DS_Store
