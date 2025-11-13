@@ -3,14 +3,17 @@ using System.Runtime.InteropServices;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+var pgPassword = builder.AddParameter("postgres-password", secret: true);
+
 var postgres = builder.AddPostgres("postgres")
-    .WithEnvironment("POSTGRES_PASSWORD", "postgres")
+    .WithPassword(pgPassword)
     .WithLifetime(ContainerLifetime.Persistent);
 
 var postgresdb = postgres.AddDatabase("postgresdb");
 
 var api  = builder.AddProject<Projects.WebApplication1>("api")
                             .WithReference(postgresdb)
+                            .WaitFor(postgresdb)
                             .WithEnvironment("ApplyMigrationsOnStartup", "true");
 
 builder.AddNpmApp("web", "../reactproject1/reactproject1", "dev")
