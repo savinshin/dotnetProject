@@ -5,12 +5,14 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using WebApplication1.Application.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var cs = builder.Configuration.GetConnectionString("postgresdb")
          ?? throw new InvalidOperationException("Connection string 'postgresdb' not found.");
 
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddDbContext<ApplicationDbContext>(opt => opt.UseNpgsql(cs));
 
 builder.Services.AddIdentityCore<IdentityUser>(opt =>
