@@ -11,7 +11,6 @@ var builder = WebApplication.CreateBuilder(args);
 var cs = builder.Configuration.GetConnectionString("postgresdb")
          ?? throw new InvalidOperationException("Connection string 'postgresdb' not found.");
 
-builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(cs));
 builder.Services.AddDbContext<ApplicationDbContext>(opt => opt.UseNpgsql(cs));
 
 builder.Services.AddIdentityCore<IdentityUser>(opt =>
@@ -87,7 +86,6 @@ app.MapControllers();
 if (app.Configuration.GetValue<bool>("ApplyMigrationsOnStartup"))
 {
     using var scope = app.Services.CreateScope();
-    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
     scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.Migrate();
 }
 

@@ -1,12 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
-using System.ComponentModel.DataAnnotations;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
+using WebApplication1.Application.Auth;
+using WebApplication1.Application.Common;
+using WebApplication1.Contracts.Auth;
 
 namespace WebApplication1.Controllers;
 
@@ -14,92 +10,64 @@ namespace WebApplication1.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly UserManager<IdentityUser> _userManager;
-    private readonly ILogger<AuthController> _logger;
-    private readonly string _issuer;
-    private readonly string _audience;
-    private readonly SymmetricSecurityKey _key;
-    private readonly int _expiresMinutes;
+    private readonly IAuthService _authService;
 
-    public AuthController(
-        UserManager<IdentityUser> userManager,
-        ILogger<AuthController> logger,
-        IConfiguration config)
+    public AuthController(IAuthService authService)
+        => _authService = authService;
+
+    [HttpPost("register")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<RegisterResponse>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<RegisterResponse>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<RegisterResponse>), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ApiResponse<RegisterResponse>>> Register(
+        [FromBody] RegisterRequest request,
+        CancellationToken ct)
     {
-        _userManager = userManager;
-        _logger = logger;
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
 
-        var jwt = config.GetSection("Jwt");
-        _issuer = jwt.GetValue<string>("Issuer") ?? "WebApp";
-        _audience = jwt.GetValue<string>("Audience") ?? "WebApp";
-        var key = jwt.GetValue<string>("Key") ?? "dev_secret_key_change_me_very_long_123!";
-        _expiresMinutes = jwt.GetValue<int?>("ExpiresMinutes") ?? 60;
-        _key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+        var result = await _authService.RegisterAsync(request, ct);
+
+        if (result.Success && result.Data is not null)
+            return Created($"/api/auth/users/{result.Data.UserId}", result);
+
+        if (result.Errors.Any(e => e.Contains("already taken", StringComparison.OrdinalIgnoreCase)))
+            return Conflict(result);
+
+        return BadRequest(result);
     }
 
     [HttpPost("login")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<ApiResponse<LoginResponse>>> Login(
+        [FromBody] LoginRequest request,
+        CancellationToken ct)
     {
-        var user = await _userManager.FindByEmailAsync(request.Email);
-        if (user is null || !await _userManager.CheckPasswordAsync(user, request.Password))
-            return Unauthorized(new { error = "Invalid email or password." });
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
 
-        var claims = new List<Claim>
-        {
-            new(JwtRegisteredClaimNames.Sub, user.Id),
-            new(JwtRegisteredClaimNames.Email, user.Email ?? ""),
-            new(ClaimTypes.NameIdentifier, user.Id),
-            new(ClaimTypes.Name, user.UserName ?? user.Email ?? user.Id)
-        };
+        var result = await _authService.LoginAsync(request, ct);
 
-        var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha256);
-        var expires = DateTime.UtcNow.AddMinutes(_expiresMinutes);
+        if (result.Success)
+            return Ok(result);
 
-        var token = new JwtSecurityToken(
-            issuer: _issuer,
-            audience: _audience,
-            claims: claims,
-            expires: expires,
-            signingCredentials: creds);
-
-        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-
-        return Ok(new LoginResponse
-        {
-            AccessToken = tokenString,
-            ExpiresAtUtc = expires,
-            TokenType = "Bearer"
-        });
+        return Unauthorized(result);
     }
 
     [HttpGet("me")]
     [Authorize]
-    public ActionResult<object> Me()
+    [ProducesResponseType(typeof(ApiResponse<CurrentUserResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<CurrentUserResponse>), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> Me(CancellationToken ct)
     {
-        return Ok(new
-        {
-            Id = User.FindFirstValue(ClaimTypes.NameIdentifier),
-            Name = User.Identity?.Name,
-            Email = User.FindFirstValue(JwtRegisteredClaimNames.Email)
-        });
-    }
+        var result = await _authService.GetCurrentUserAsync(User, ct);
 
-    public class LoginRequest
-    {
-        [Required, EmailAddress]
-        public string Email { get; set; } = string.Empty;
+        if (!result.Success)
+            return Unauthorized(result);
 
-        [Required]
-        public string Password { get; set; } = string.Empty;
-    }
-
-    public class LoginResponse
-    {
-        public string AccessToken { get; set; } = string.Empty;
-        public DateTime ExpiresAtUtc { get; set; }
-        public string TokenType { get; set; } = "Bearer";
+        return Ok(result);
     }
 }
